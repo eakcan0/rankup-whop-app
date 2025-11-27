@@ -5,7 +5,7 @@ import { Crown, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
 import './App.css';
 
-const API_URL = 'http://localhost:3000/api/leaderboard';
+const API_URL = import.meta.env.VITE_API_URL;
 const PLACEHOLDER_AVATAR = (seed = 'player') =>
   `https://avatar.vercel.sh/${encodeURIComponent(seed)}?size=64`;
 
@@ -39,7 +39,7 @@ const App = () => {
     setError(null);
 
     try {
-      const { data } = await axios.get(API_URL);
+      const { data } = await axios.get(`${API_URL}/api/leaderboard`);
       setPlayers(data?.data || []);
     } catch (err) {
       console.error('Leaderboard fetch failed', err);
