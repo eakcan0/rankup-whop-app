@@ -5,7 +5,9 @@ import { Crown, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
 import './App.css';
 
+// Vercel'deki Environment Variable'ı okur
 const API_URL = import.meta.env.VITE_API_URL;
+
 const PLACEHOLDER_AVATAR = (seed = 'player') =>
   `https://avatar.vercel.sh/${encodeURIComponent(seed)}?size=64`;
 
@@ -39,6 +41,7 @@ const App = () => {
     setError(null);
 
     try {
+      // API adresinin sonuna endpoint yolunu ekliyoruz
       const { data } = await axios.get(`${API_URL}/api/leaderboard`);
       setPlayers(data?.data || []);
     } catch (err) {
@@ -72,10 +75,13 @@ const App = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 text-sm text-slate-400">
-  <span className="h-2 w-2 rounded-full bg-green-400 shadow-glow animate-pulse" />
-  System Status: <span className="text-emerald-400 font-bold tracking-wide">LIVE & SYNCED</span>
-</div>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            {/* CANLI DURUM GÖSTERGESİ (DÜZELTİLMİŞ HALİ) */}
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <span className="h-2 w-2 rounded-full bg-green-400 shadow-glow animate-pulse" />
+              System Status: <span className="text-emerald-400 font-bold tracking-wide">LIVE & SYNCED</span>
+            </div>
+            
             <button
               type="button"
               onClick={fetchLeaderboard}
@@ -164,7 +170,7 @@ const App = () => {
 
             {!loading && !error && players.length === 0 && (
               <div className="rounded-2xl border border-white/10 bg-slate-900/40 p-10 text-center text-slate-400">
-                No data yet. Trigger `/api/activity` to start filling the board.
+                No data yet. Waiting for live activity...
               </div>
             )}
           </div>
