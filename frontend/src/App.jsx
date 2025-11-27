@@ -72,11 +72,10 @@ const App = () => {
             </p>
           </div>
 
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="h-2 w-2 rounded-full bg-green-400 shadow-glow" />
-              Synced with http://localhost:3000
-            </div>
+          <div className="flex items-center gap-2 text-sm text-slate-400">
+  <span className="h-2 w-2 rounded-full bg-green-400 shadow-glow animate-pulse" />
+  System Status: <span className="text-emerald-400 font-bold tracking-wide">LIVE & SYNCED</span>
+</div>
             <button
               type="button"
               onClick={fetchLeaderboard}
