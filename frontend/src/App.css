@@ -1,0 +1,173 @@
+.app-shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2.5rem;
+  background: rgba(3, 3, 20, 0.85);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  align-items: flex-start;
+  margin-bottom: 2.5rem;
+}
+
+.app-header h1 {
+  margin: 0.25rem 0;
+  font-size: 2.5rem;
+}
+
+.subtle {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.muted {
+  color: #94a3b8;
+  margin: 0;
+}
+
+.muted.small {
+  font-size: 0.75rem;
+}
+
+.session-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.2rem;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 250, 252, 0.12);
+  font-size: 0.95rem;
+  background: rgba(15, 23, 42, 0.65);
+  color: #f8fafc;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 8px #22c55e;
+}
+
+.panel {
+  background: rgba(15, 23, 42, 0.8);
+  border-radius: 20px;
+  padding: 1.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.panel-header h2 {
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ghost-btn {
+  background: rgba(148, 163, 184, 0.1);
+  color: #f8fafc;
+  padding: 0.65rem 1.25rem;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.ghost-btn:hover {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.leaderboard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 48px 56px 1fr 140px;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.rank {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.identity .name {
+  margin: 0;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.score {
+  text-align: right;
+}
+
+.score .value {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.error {
+  margin-top: 1rem;
+  color: #f87171;
+}
+
+@media (max-width: 768px) {
+  body {
+    padding: 1.5rem 1rem;
+  }
+
+  .app-shell {
+    padding: 1.5rem;
+  }
+
+  .app-header {
+    flex-direction: column;
+  }
+
+  .leaderboard-row {
+    grid-template-columns: 32px 48px 1fr;
+    gap: 0.75rem;
+  }
+
+  .score {
+    text-align: left;
+    grid-column: span 3;
+  }
+}

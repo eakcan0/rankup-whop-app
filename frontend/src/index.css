@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Space Grotesk', 'Clash Display', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #f8fafc;
+  background-color: #020617;
+}
+
+body {
+  @apply min-h-screen m-0 bg-gray-950 bg-fixed text-slate-100; /* bg-mesh-cyber yerine bg-gray-950 koyduk */
+}
+
+#root {
+  @apply min-h-screen;
+}
