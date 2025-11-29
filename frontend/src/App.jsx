@@ -1,13 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { Crown, RefreshCw } from 'lucide-react';
+import { Crown, RefreshCw, Settings2, CheckCircle2, Loader2 } from 'lucide-react';
 import clsx from 'clsx';
 import './App.css';
 
-// Vercel'deki Environment Variable'ı okur
-const API_URL = import.meta.env.VITE_API_URL;
-
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const PLACEHOLDER_AVATAR = (seed = 'player') =>
   `https://avatar.vercel.sh/${encodeURIComponent(seed)}?size=64`;
 
@@ -31,7 +29,162 @@ const rowVariants = {
   })
 };
 
-const App = () => {
+const AdminView = ({ companyId }) => {
+  const [form, setForm] = useState({ points_per_msg: '', points_per_join: '' });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState(null);
+  const [error, setError] = useState(null);
+
+  const fetchSettings = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data } = await axios.get(`${API_BASE_URL}/api/settings`, {
+        params: { company_id: companyId }
+      });
+      setForm({
+        points_per_msg: data?.data?.points_per_msg ?? '',
+        points_per_join: data?.data?.points_per_join ?? ''
+      });
+      setError(null);
+    } catch (err) {
+      console.error('Failed to load settings', err);
+      setError('Unable to load settings');
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setStatus(null);
+    setError(null);
+
+    try {
+      await axios.post(
+        `${API_BASE_URL}/api/settings`,
+        {
+          points_per_msg: Number(form.points_per_msg),
+          points_per_join: Number(form.points_per_join)
+        },
+        { params: { company_id: companyId } }
+      );
+
+      setStatus('Settings Saved');
+    } catch (err) {
+      console.error('Failed to save settings', err);
+      setError('Unable to save settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen w-full bg-transparent px-4 py-10 text-slate-100">
+      <div className="mx-auto flex max-w-3xl flex-col gap-6">
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl shadow-cyan-500/10 backdrop-blur-[30px]">
+          <div className="mb-8 flex flex-col gap-2 text-center">
+            <div className="mx-auto flex items-center justify-center gap-2 rounded-full border border-cyan-400/20 px-4 py-1 text-xs uppercase tracking-[0.35em] text-cyan-200">
+              <Settings2 className="h-4 w-4 text-cyan-300" />
+              Control Room
+            </div>
+            <h1 className="text-4xl font-semibold text-white">
+              Whop Rank<span className="text-cyan-300">UP</span> Admin
+            </h1>
+            <p className="text-sm text-slate-400">
+              Tune per-company scoring rules to fit your community&apos;s engagement rituals.
+            </p>
+          </div>
+
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-16 text-slate-300">
+              <Loader2 className="h-10 w-10 animate-spin text-cyan-300" />
+              <p className="mt-4 text-xs uppercase tracking-[0.4em]">Loading settings...</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-8">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm uppercase tracking-[0.3em] text-slate-400">
+                    Points per Message
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    name="points_per_msg"
+                    value={form.points_per_msg}
+                    onChange={handleChange}
+                    className="rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-3 text-lg text-white outline-none transition focus:border-cyan-400 focus:bg-slate-900"
+                    placeholder="10"
+                    required
+                  />
+                </label>
+
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm uppercase tracking-[0.3em] text-slate-400">
+                    Points per Join
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    name="points_per_join"
+                    value={form.points_per_join}
+                    onChange={handleChange}
+                    className="rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-3 text-lg text-white outline-none transition focus:border-cyan-400 focus:bg-slate-900"
+                    placeholder="50"
+                    required
+                  />
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-3 text-lg font-semibold text-white transition hover:border-cyan-300 hover:bg-cyan-300/20 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={saving}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-5 w-5 text-cyan-200" />
+                    Save Settings
+                  </>
+                )}
+              </button>
+
+              {status && (
+                <div className="rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-4 py-3 text-center text-emerald-200">
+                  {status}
+                </div>
+              )}
+
+              {error && (
+                <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-center text-rose-200">
+                  {error}
+                </div>
+              )}
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const LeaderboardView = ({ companyId }) => {
   const [players, setPlayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -41,8 +194,9 @@ const App = () => {
     setError(null);
 
     try {
-      // API adresinin sonuna endpoint yolunu ekliyoruz
-      const { data } = await axios.get(`${API_URL}/api/leaderboard`);
+      const { data } = await axios.get(`${API_BASE_URL}/api/leaderboard`, {
+        params: { company_id: companyId }
+      });
       setPlayers(data?.data || []);
     } catch (err) {
       console.error('Leaderboard fetch failed', err);
@@ -54,7 +208,8 @@ const App = () => {
 
   useEffect(() => {
     fetchLeaderboard();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
 
   return (
     <div className="min-h-screen w-full bg-transparent px-4 py-10 text-slate-100">
@@ -73,15 +228,16 @@ const App = () => {
               Tracking the most engaged Whop citizens in real time. Stay active, keep the streak alive,
               and climb the neon wall of fame.
             </p>
+            <p className="text-xs uppercase tracking-[0.35em] text-slate-500">
+              TENANT: {companyId}
+            </p>
           </div>
 
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            {/* CANLI DURUM GÖSTERGESİ (DÜZELTİLMİŞ HALİ) */}
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="h-2 w-2 rounded-full bg-green-400 shadow-glow animate-pulse" />
-              System Status: <span className="text-emerald-400 font-bold tracking-wide">LIVE & SYNCED</span>
-            </div>
-            
+           <div className="flex items-center gap-2 text-sm text-slate-400">
+            <span className="h-2 w-2 rounded-full bg-green-400 shadow-glow animate-pulse" />
+               System Status: <span className="text-emerald-400 font-bold tracking-wide">LIVE & SYNCED</span>
+          </div>
             <button
               type="button"
               onClick={fetchLeaderboard}
@@ -123,7 +279,7 @@ const App = () => {
 
                 return (
                   <motion.div
-                    key={player.whop_user_id || `player-${rank}`}
+                    key={`${companyId}-${player.whop_user_id || rank}`}
                     variants={rowVariants}
                     initial="hidden"
                     animate="visible"
@@ -140,8 +296,7 @@ const App = () => {
                         rank <= 3 ? 'text-white' : 'text-slate-300'
                       )}
                     >
-                      {rank === 1 && <Crown className="h-5 w-5 text-yellow-300" />}
-                      {rank !== 1 && `#${rank}`}
+                      {rank === 1 ? <Crown className="h-5 w-5 text-yellow-300" /> : `#${rank}`}
                     </div>
 
                     <img
@@ -170,7 +325,7 @@ const App = () => {
 
             {!loading && !error && players.length === 0 && (
               <div className="rounded-2xl border border-white/10 bg-slate-900/40 p-10 text-center text-slate-400">
-                No data yet. Waiting for live activity...
+                No data yet. Trigger `/api/webhook/activity` to start filling the board.
               </div>
             )}
           </div>
@@ -178,6 +333,28 @@ const App = () => {
       </div>
     </div>
   );
+};
+
+const App = () => {
+  const clientContext = useMemo(() => {
+    if (typeof window === 'undefined') {
+      return { path: '/', companyId: 'demo-company' };
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const companyId = urlParams.get('company_id') || 'demo-company';
+    const path = window.location.pathname || '/';
+
+    return { path, companyId };
+  }, []);
+
+  const isAdmin = clientContext.path.startsWith('/dashboard');
+
+  if (isAdmin) {
+    return <AdminView companyId={clientContext.companyId} />;
+  }
+
+  return <LeaderboardView companyId={clientContext.companyId} />;
 };
 
 export default App;
