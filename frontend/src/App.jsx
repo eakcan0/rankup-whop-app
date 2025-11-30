@@ -338,21 +338,20 @@ const LeaderboardView = ({ companyId }) => {
 const App = () => {
   const clientContext = useMemo(() => {
     if (typeof window === 'undefined') {
-      return { path: '/', companyId: null, isConfigMode: false };
+      return { companyId: null, isConfigMode: false };
     }
 
     const urlParams = new URLSearchParams(window.location.search);
-    const companyId = urlParams.get('company_id'); // 'demo-company' YEDİĞİNİ KALDIRDIM
-    const path = window.location.pathname || '/';
+    const companyId = urlParams.get('company_id');
     
-    // Whop bazen iframe içinde path'i tam vermeyebilir, bu yüzden 
-    // URL parametresine '?mode=admin' ekleyerek de kontrol sağlayacağız.
-    const isConfigMode = path.startsWith('/dashboard') || urlParams.get('mode') === 'admin';
+    // YENİ MANTIK: URL'de "view=dashboard" var mı? 
+    // Vercel'de "/dashboard" yolu yerine "?view=dashboard" kullanarak 404'ten kaçıyoruz.
+    const isConfigMode = urlParams.get('view') === 'dashboard' || urlParams.get('mode') === 'admin';
 
-    return { path, companyId, isConfigMode };
+    return { companyId, isConfigMode };
   }, []);
 
-  // Eğer Company ID yoksa BOŞ EKRAN göster (Red yememek için kritik)
+  // Eğer Company ID yoksa BOŞ EKRAN göster (Veri gizliliği için şart)
   if (!clientContext.companyId) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center text-slate-400">
