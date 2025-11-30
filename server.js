@@ -193,7 +193,7 @@ const DEMO_COMPANY_ID = process.env.DEMO_COMPANY_ID || 'demo-company';
 
 const start = async () => {
   try {
-    await seedDemoCompany(DEMO_COMPANY_ID);
+    // await seedDemoCompany(DEMO_COMPANY_ID);
     app.listen(PORT, () => {
       console.log(`🚀 Whop backend ready on port ${PORT}`);
     });

@@ -338,19 +338,32 @@ const LeaderboardView = ({ companyId }) => {
 const App = () => {
   const clientContext = useMemo(() => {
     if (typeof window === 'undefined') {
-      return { path: '/', companyId: 'demo-company' };
+      return { path: '/', companyId: null, isConfigMode: false };
     }
 
     const urlParams = new URLSearchParams(window.location.search);
-    const companyId = urlParams.get('company_id') || 'demo-company';
+    const companyId = urlParams.get('company_id'); // 'demo-company' YEDİĞİNİ KALDIRDIM
     const path = window.location.pathname || '/';
+    
+    // Whop bazen iframe içinde path'i tam vermeyebilir, bu yüzden 
+    // URL parametresine '?mode=admin' ekleyerek de kontrol sağlayacağız.
+    const isConfigMode = path.startsWith('/dashboard') || urlParams.get('mode') === 'admin';
 
-    return { path, companyId };
+    return { path, companyId, isConfigMode };
   }, []);
 
-  const isAdmin = clientContext.path.startsWith('/dashboard');
+  // Eğer Company ID yoksa BOŞ EKRAN göster (Red yememek için kritik)
+  if (!clientContext.companyId) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center text-slate-400">
+        <p>Waiting for Whop context...</p>
+        <span className="text-xs opacity-50">No company_id found.</span>
+      </div>
+    );
+  }
 
-  if (isAdmin) {
+  // Admin modu kontrolü
+  if (clientContext.isConfigMode) {
     return <AdminView companyId={clientContext.companyId} />;
   }
 
