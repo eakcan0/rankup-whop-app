@@ -1,16 +1,18 @@
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 
+// Veritabanı dosyasının yolu
 const DB_PATH = path.join(__dirname, process.env.DB_FILE || 'leaderboard.db');
 const db = new sqlite3.Database(DB_PATH);
 
 const DEFAULT_MSG_POINTS = Number(process.env.DEFAULT_POINTS_PER_MSG || 10);
 const DEFAULT_JOIN_POINTS = Number(process.env.DEFAULT_POINTS_PER_JOIN || 50);
 
+// --- KRİTİK DÜZELTME: DROP TABLE SATIRLARI KALDIRILDI ---
+// Verilerin kalıcı olması için sadece 'CREATE TABLE IF NOT EXISTS' kullanıyoruz.
 db.serialize(() => {
   db.run('PRAGMA foreign_keys = ON');
-  db.run('DROP TABLE IF EXISTS users');
-  db.run('DROP TABLE IF EXISTS settings');
+  
   db.run(`
     CREATE TABLE IF NOT EXISTS settings (
       company_id TEXT PRIMARY KEY,
@@ -18,6 +20,7 @@ db.serialize(() => {
       points_per_join INTEGER DEFAULT ${DEFAULT_JOIN_POINTS}
     )
   `);
+  
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       company_id TEXT NOT NULL,
@@ -69,6 +72,8 @@ const ensureCompanySettings = async (companyId) => {
     throw new Error('companyId is required');
   }
 
+  // Önce ayar var mı diye bak, yoksa oluştur.
+  // INSERT OR IGNORE yerine bu mantık daha güvenli olabilir ama mevcut yapı da çalışır.
   await runAsync(
     `
       INSERT INTO settings (company_id, points_per_msg, points_per_join)
@@ -159,18 +164,23 @@ const getTopUsers = (companyId, limit = 50) =>
     `
       SELECT whop_user_id, username, avatar_url, points
       FROM users
-      WHERE company_id = ?
+      WHERE company_id = ?  -- BURASI ÇOK ÖNEMLİ (DOĞRU YAPILMIŞ)
       ORDER BY points DESC
       LIMIT ?
     `,
     [companyId, limit]
   );
 
+// --- SEED FONKSİYONU GÜNCELLEMESİ ---
+// Sadece Demo Company için çalışsın ve zorla çalıştırmayalım.
 const seedDemoCompany = async (companyId = 'demo-company') => {
+  // Canlı ortamda yanlışlıkla gerçek bir company ID gelirse seed yapmasın.
+  if (companyId !== 'demo-company') return false;
+
   await ensureCompanySettings(companyId);
   const existing = await getTopUsers(companyId, 1);
   if (existing.length > 0) {
-    return false;
+    return false; // Zaten veri varsa ekleme yapma
   }
 
   const sampleUsers = [
@@ -206,4 +216,3 @@ module.exports = {
   DEFAULT_MSG_POINTS,
   DEFAULT_JOIN_POINTS
 };
-
