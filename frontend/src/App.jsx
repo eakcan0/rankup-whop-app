@@ -1,13 +1,61 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { Crown, RefreshCw, Settings2, CheckCircle2, Loader2 } from 'lucide-react';
+import { Crown, RefreshCw, Settings2, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import './App.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const PLACEHOLDER_AVATAR = (seed = 'player') =>
   `https://avatar.vercel.sh/${encodeURIComponent(seed)}?size=64`;
+const DEV_FALLBACK_COMPANY_ID =
+  import.meta.env.VITE_DEFAULT_COMPANY_ID || import.meta.env.VITE_COMPANY_ID || null;
+
+const readWhopCompanyId = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const whop = window.whop;
+  return (
+    whop?.session?.company_id ||
+    whop?.session?.organization?.company_id ||
+    whop?.company?.id ||
+    whop?.context?.company_id ||
+    whop?.organization?.company_id ||
+    null
+  );
+};
+
+const extractCompanyIdFromPayload = (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  return (
+    payload.companyId ||
+    payload.company_id ||
+    payload?.payload?.companyId ||
+    payload?.payload?.company_id ||
+    payload?.context?.companyId ||
+    payload?.context?.company_id ||
+    payload?.session?.company_id ||
+    null
+  );
+};
+
+const isConfigView = (value) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.toLowerCase();
+    return normalized === 'dashboard' || normalized === 'admin';
+  }
+
+  return false;
+};
 
 const rankStyles = {
   1: 'border-yellow-400/70 shadow-[0_0_35px_rgba(250,204,21,0.45)] bg-gradient-to-r from-yellow-500/10 to-yellow-200/5',
@@ -37,6 +85,10 @@ const AdminView = ({ companyId }) => {
   const [error, setError] = useState(null);
 
   const fetchSettings = useCallback(async () => {
+    if (!companyId) {
+      return;
+    }
+
     setLoading(true);
     try {
       const { data } = await axios.get(`${API_BASE_URL}/api/settings`, {
@@ -66,6 +118,10 @@ const AdminView = ({ companyId }) => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (!companyId) {
+      return;
+    }
+
     setSaving(true);
     setStatus(null);
     setError(null);
@@ -189,7 +245,11 @@ const LeaderboardView = ({ companyId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchLeaderboard = async () => {
+  const fetchLeaderboard = useCallback(async () => {
+    if (!companyId) {
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -204,12 +264,11 @@ const LeaderboardView = ({ companyId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [companyId]);
 
   useEffect(() => {
     fetchLeaderboard();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId]);
+  }, [fetchLeaderboard]);
 
   return (
     <div className="min-h-screen w-full bg-transparent px-4 py-10 text-slate-100">
@@ -336,32 +395,165 @@ const LeaderboardView = ({ companyId }) => {
 };
 
 const App = () => {
-  const clientContext = useMemo(() => {
+  const [clientContext, setClientContext] = useState({
+    companyId: null,
+    isConfigMode: false,
+    ready: false,
+    source: null
+  });
+
+  useEffect(() => {
     if (typeof window === 'undefined') {
-      return { companyId: null, isConfigMode: false };
+      setClientContext((prev) => ({ ...prev, ready: true }));
+      return;
     }
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const companyId = urlParams.get('company_id');
-    
-    // YENİ MANTIK: URL'de "view=dashboard" var mı? 
-    // Vercel'de "/dashboard" yolu yerine "?view=dashboard" kullanarak 404'ten kaçıyoruz.
-    const isConfigMode = urlParams.get('view') === 'dashboard' || urlParams.get('mode') === 'admin';
+    let cancelled = false;
+    let pollHandle = null;
 
-    return { companyId, isConfigMode };
+    const mergeContext = (updates) => {
+      if (cancelled) {
+        return;
+      }
+
+      setClientContext((prev) => ({ ...prev, ...updates }));
+    };
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlCompanyId = urlParams.get('company_id') || urlParams.get('companyId');
+    const urlIsConfigMode =
+      isConfigView(urlParams.get('view')) || isConfigView(urlParams.get('mode'));
+
+    const whopCompanyId = readWhopCompanyId();
+
+    let resolvedImmediately = false;
+    if (whopCompanyId) {
+      resolvedImmediately = true;
+      mergeContext({
+        companyId: whopCompanyId,
+        isConfigMode: urlIsConfigMode,
+        ready: true,
+        source: 'whop'
+      });
+    } else if (urlCompanyId) {
+      resolvedImmediately = true;
+      mergeContext({
+        companyId: urlCompanyId,
+        isConfigMode: urlIsConfigMode,
+        ready: true,
+        source: 'url'
+      });
+    } else if (import.meta.env.DEV && DEV_FALLBACK_COMPANY_ID) {
+      resolvedImmediately = true;
+      mergeContext({
+        companyId: DEV_FALLBACK_COMPANY_ID,
+        isConfigMode: urlIsConfigMode,
+        ready: true,
+        source: 'dev-fallback'
+      });
+    } else {
+      mergeContext({
+        isConfigMode: urlIsConfigMode,
+        source: null
+      });
+    }
+
+    const stopPolling = () => {
+      if (pollHandle) {
+        window.clearInterval(pollHandle);
+        pollHandle = null;
+      }
+    };
+
+    const handleMessage = (event) => {
+      const nextCompanyId = extractCompanyIdFromPayload(event?.data);
+      if (!nextCompanyId) {
+        return;
+      }
+
+      const messageMode =
+        isConfigView(event?.data?.view) || isConfigView(event?.data?.mode) || urlIsConfigMode;
+
+      mergeContext({
+        companyId: nextCompanyId,
+        isConfigMode: messageMode,
+        ready: true,
+        source: 'message'
+      });
+
+      stopPolling();
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    if (!resolvedImmediately) {
+      pollHandle = window.setInterval(() => {
+        const polledCompanyId = readWhopCompanyId();
+        if (polledCompanyId) {
+          mergeContext({
+            companyId: polledCompanyId,
+            isConfigMode: urlIsConfigMode,
+            ready: true,
+            source: 'whop-poll'
+          });
+          stopPolling();
+        }
+      }, 500);
+    }
+
+    const readyTimeout = window.setTimeout(() => {
+      mergeContext({ ready: true });
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('message', handleMessage);
+      stopPolling();
+      window.clearTimeout(readyTimeout);
+    };
   }, []);
 
-  // Eğer Company ID yoksa BOŞ EKRAN göster (Veri gizliliği için şart)
-  if (!clientContext.companyId) {
+  if (!clientContext.ready) {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center text-slate-400">
-        <p>Waiting for Whop context...</p>
-        <span className="text-xs opacity-50">No company_id found.</span>
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-slate-950 px-4 text-slate-200">
+        <div className="flex flex-col items-center gap-4 rounded-3xl border border-white/10 bg-white/5 px-10 py-12 text-center shadow-2xl shadow-cyan-500/10 backdrop-blur-2xl">
+          <Loader2 className="h-10 w-10 animate-spin text-cyan-300" />
+          <div>
+            <p className="text-lg font-semibold text-white">Bootstrapping RankUp</p>
+            <p className="text-sm text-slate-400">
+              Waiting for Whop to share the active session&hellip;
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // Admin modu kontrolü
+  if (!clientContext.companyId) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-slate-950 px-4 text-slate-100">
+        <div className="max-w-md rounded-3xl border border-rose-500/20 bg-rose-500/5 p-10 text-center shadow-2xl shadow-rose-900/30 backdrop-blur-2xl">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-rose-500/40 bg-rose-500/10">
+            <AlertCircle className="h-8 w-8 text-rose-300" />
+          </div>
+          <h2 className="text-2xl font-semibold text-white">Company context missing</h2>
+          <p className="mt-3 text-sm text-slate-300">
+            Launch RankUp from inside Whop or ensure the iFrame passes a valid <code>companyId</code>{' '}
+            before resubmitting to the App Store.
+          </p>
+          <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 p-4 text-left text-xs text-slate-400">
+            <p className="font-semibold uppercase tracking-[0.3em] text-slate-500">Checklist</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>Whop session exposes <code>window.whop.session.company_id</code></li>
+              <li>Optional: pass <code>company_id</code> via query string for local dev</li>
+              <li>Reload after ensuring context is available</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (clientContext.isConfigMode) {
     return <AdminView companyId={clientContext.companyId} />;
   }
