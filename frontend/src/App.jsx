@@ -35,6 +35,7 @@ const extractCompanyIdFromPayload = (payload) => {
   return (
     payload.companyId ||
     payload.company_id ||
+    payload?.company?.id ||
     payload?.payload?.companyId ||
     payload?.payload?.company_id ||
     payload?.context?.companyId ||
@@ -399,7 +400,8 @@ const App = () => {
     companyId: null,
     isConfigMode: false,
     ready: false,
-    source: null
+    source: null,
+    waitExpired: false
   });
 
   useEffect(() => {
@@ -410,6 +412,7 @@ const App = () => {
 
     let cancelled = false;
     let pollHandle = null;
+    let waitTimeout = null;
 
     const mergeContext = (updates) => {
       if (cancelled) {
@@ -456,6 +459,7 @@ const App = () => {
         isConfigMode: urlIsConfigMode,
         source: null
       });
+      mergeContext({ ready: true });
     }
 
     const stopPolling = () => {
@@ -465,23 +469,34 @@ const App = () => {
       }
     };
 
+    const stopWaiting = () => {
+      if (waitTimeout) {
+        window.clearTimeout(waitTimeout);
+        waitTimeout = null;
+      }
+    };
+
     const handleMessage = (event) => {
-      const nextCompanyId = extractCompanyIdFromPayload(event?.data);
-      if (!nextCompanyId) {
+      const data = event?.data;
+      const isWhopContext = data?.type === 'whop_context' || data?.source === 'whop';
+      const nextCompanyId = extractCompanyIdFromPayload(data);
+      if (!nextCompanyId && !isWhopContext) {
         return;
       }
 
       const messageMode =
-        isConfigView(event?.data?.view) || isConfigView(event?.data?.mode) || urlIsConfigMode;
+        isConfigView(data?.view) || isConfigView(data?.mode) || urlIsConfigMode;
 
       mergeContext({
         companyId: nextCompanyId,
         isConfigMode: messageMode,
         ready: true,
-        source: 'message'
+        source: 'message',
+        waitExpired: false
       });
 
       stopPolling();
+      stopWaiting();
     };
 
     window.addEventListener('message', handleMessage);
@@ -494,26 +509,29 @@ const App = () => {
             companyId: polledCompanyId,
             isConfigMode: urlIsConfigMode,
             ready: true,
-            source: 'whop-poll'
+            source: 'whop-poll',
+            waitExpired: false
           });
           stopPolling();
+          stopWaiting();
         }
       }, 500);
     }
 
-    const readyTimeout = window.setTimeout(() => {
-      mergeContext({ ready: true });
-    }, 3000);
+    waitTimeout = window.setTimeout(() => {
+      mergeContext({ ready: true, waitExpired: true });
+      stopPolling();
+    }, 30000);
 
     return () => {
       cancelled = true;
       window.removeEventListener('message', handleMessage);
       stopPolling();
-      window.clearTimeout(readyTimeout);
+      stopWaiting();
     };
   }, []);
 
-  if (!clientContext.ready) {
+  if (!clientContext.companyId && !clientContext.waitExpired) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-slate-950 px-4 text-slate-200">
         <div className="flex flex-col items-center gap-4 rounded-3xl border border-white/10 bg-white/5 px-10 py-12 text-center shadow-2xl shadow-cyan-500/10 backdrop-blur-2xl">
@@ -529,7 +547,7 @@ const App = () => {
     );
   }
 
-  if (!clientContext.companyId) {
+  if (!clientContext.companyId && clientContext.waitExpired) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-slate-950 px-4 text-slate-100">
         <div className="max-w-md rounded-3xl border border-rose-500/20 bg-rose-500/5 p-10 text-center shadow-2xl shadow-rose-900/30 backdrop-blur-2xl">
