@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Crown, RefreshCw, Settings2, CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
 import clsx from 'clsx';
 import './App.css';
+import { iframeSdk } from './lib/whop-sdk';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 const PLACEHOLDER_AVATAR = (seed = 'player') =>
@@ -11,20 +12,43 @@ const PLACEHOLDER_AVATAR = (seed = 'player') =>
 const DEV_FALLBACK_COMPANY_ID =
   import.meta.env.VITE_DEFAULT_COMPANY_ID || import.meta.env.VITE_COMPANY_ID || null;
 
-const readWhopCompanyId = () => {
+/**
+ * Extract company_id from URL path
+ * Whop passes company_id via URL path like: /dashboard/biz_xxx or /experience/biz_xxx
+ */
+const extractCompanyIdFromPath = () => {
   if (typeof window === 'undefined') {
     return null;
   }
 
-  const whop = window.whop;
-  return (
-    whop?.session?.company_id ||
-    whop?.session?.organization?.company_id ||
-    whop?.company?.id ||
-    whop?.context?.company_id ||
-    whop?.organization?.company_id ||
-    null
-  );
+  const pathname = window.location.pathname;
+  // Match patterns like /dashboard/biz_xxx, /experience/biz_xxx, or just /biz_xxx
+  const pathMatch = pathname.match(/\/(biz_[a-zA-Z0-9_]+)/);
+  if (pathMatch) {
+    return pathMatch[1];
+  }
+
+  // Also try matching company ID patterns in path segments
+  const segments = pathname.split('/').filter(Boolean);
+  for (const segment of segments) {
+    if (segment.startsWith('biz_') || segment.startsWith('company_')) {
+      return segment;
+    }
+  }
+
+  return null;
+};
+
+/**
+ * Extract company_id from URL query parameters
+ */
+const extractCompanyIdFromQuery = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('company_id') || urlParams.get('companyId') || null;
 };
 
 const extractCompanyIdFromPayload = (payload) => {
@@ -294,10 +318,10 @@ const LeaderboardView = ({ companyId }) => {
           </div>
 
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-           <div className="flex items-center gap-2 text-sm text-slate-400">
-            <span className="h-2 w-2 rounded-full bg-green-400 shadow-glow animate-pulse" />
-               System Status: <span className="text-emerald-400 font-bold tracking-wide">LIVE & SYNCED</span>
-          </div>
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <span className="h-2 w-2 rounded-full bg-green-400 shadow-glow animate-pulse" />
+              System Status: <span className="text-emerald-400 font-bold tracking-wide">LIVE & SYNCED</span>
+            </div>
             <button
               type="button"
               onClick={fetchLeaderboard}
@@ -411,75 +435,90 @@ const App = () => {
     }
 
     let cancelled = false;
-    let pollHandle = null;
-    let waitTimeout = null;
 
     const mergeContext = (updates) => {
       if (cancelled) {
         return;
       }
-
       setClientContext((prev) => ({ ...prev, ...updates }));
     };
 
+    // Determine view mode from URL
     const urlParams = new URLSearchParams(window.location.search);
-    const urlCompanyId = urlParams.get('company_id') || urlParams.get('companyId');
     const urlIsConfigMode =
-      isConfigView(urlParams.get('view')) || isConfigView(urlParams.get('mode'));
+      isConfigView(urlParams.get('view')) ||
+      isConfigView(urlParams.get('mode')) ||
+      window.location.pathname.includes('/dashboard');
 
-    const whopCompanyId = readWhopCompanyId();
+    // Try extraction methods in order of priority
+    const initializeContext = async () => {
+      // 1. Try URL path (Whop's primary method)
+      const pathCompanyId = extractCompanyIdFromPath();
+      if (pathCompanyId) {
+        mergeContext({
+          companyId: pathCompanyId,
+          isConfigMode: urlIsConfigMode,
+          ready: true,
+          source: 'path'
+        });
+        return;
+      }
 
-    let resolvedImmediately = false;
-    if (whopCompanyId) {
-      resolvedImmediately = true;
+      // 2. Try iframe SDK context
+      try {
+        const sdkContext = await iframeSdk.getContext();
+        const sdkCompanyId = sdkContext?.companyId || sdkContext?.company_id || sdkContext?.company?.id;
+        if (sdkCompanyId) {
+          mergeContext({
+            companyId: sdkCompanyId,
+            isConfigMode: urlIsConfigMode,
+            ready: true,
+            source: 'sdk'
+          });
+          return;
+        }
+      } catch (error) {
+        console.warn('Failed to get iframe SDK context:', error);
+      }
+
+      // 3. Try URL query params
+      const queryCompanyId = extractCompanyIdFromQuery();
+      if (queryCompanyId) {
+        mergeContext({
+          companyId: queryCompanyId,
+          isConfigMode: urlIsConfigMode,
+          ready: true,
+          source: 'query'
+        });
+        return;
+      }
+
+      // 4. Dev fallback
+      if (import.meta.env.DEV && DEV_FALLBACK_COMPANY_ID) {
+        mergeContext({
+          companyId: DEV_FALLBACK_COMPANY_ID,
+          isConfigMode: urlIsConfigMode,
+          ready: true,
+          source: 'dev-fallback'
+        });
+        return;
+      }
+
+      // No company ID found
       mergeContext({
-        companyId: whopCompanyId,
         isConfigMode: urlIsConfigMode,
         ready: true,
-        source: 'whop'
-      });
-    } else if (urlCompanyId) {
-      resolvedImmediately = true;
-      mergeContext({
-        companyId: urlCompanyId,
-        isConfigMode: urlIsConfigMode,
-        ready: true,
-        source: 'url'
-      });
-    } else if (import.meta.env.DEV && DEV_FALLBACK_COMPANY_ID) {
-      resolvedImmediately = true;
-      mergeContext({
-        companyId: DEV_FALLBACK_COMPANY_ID,
-        isConfigMode: urlIsConfigMode,
-        ready: true,
-        source: 'dev-fallback'
-      });
-    } else {
-      mergeContext({
-        isConfigMode: urlIsConfigMode,
+        waitExpired: true,
         source: null
       });
-      mergeContext({ ready: true });
-    }
-
-    const stopPolling = () => {
-      if (pollHandle) {
-        window.clearInterval(pollHandle);
-        pollHandle = null;
-      }
     };
 
-    const stopWaiting = () => {
-      if (waitTimeout) {
-        window.clearTimeout(waitTimeout);
-        waitTimeout = null;
-      }
-    };
-
+    // Listen for postMessage from Whop parent iframe
     const handleMessage = (event) => {
       const data = event?.data;
       const isWhopContext = data?.type === 'whop_context' || data?.source === 'whop';
       const nextCompanyId = extractCompanyIdFromPayload(data);
+
       if (!nextCompanyId && !isWhopContext) {
         return;
       }
@@ -494,40 +533,16 @@ const App = () => {
         source: 'message',
         waitExpired: false
       });
-
-      stopPolling();
-      stopWaiting();
     };
 
     window.addEventListener('message', handleMessage);
 
-    if (!resolvedImmediately) {
-      pollHandle = window.setInterval(() => {
-        const polledCompanyId = readWhopCompanyId();
-        if (polledCompanyId) {
-          mergeContext({
-            companyId: polledCompanyId,
-            isConfigMode: urlIsConfigMode,
-            ready: true,
-            source: 'whop-poll',
-            waitExpired: false
-          });
-          stopPolling();
-          stopWaiting();
-        }
-      }, 500);
-    }
-
-    waitTimeout = window.setTimeout(() => {
-      mergeContext({ ready: true, waitExpired: true });
-      stopPolling();
-    }, 30000);
+    // Initialize context
+    initializeContext();
 
     return () => {
       cancelled = true;
       window.removeEventListener('message', handleMessage);
-      stopPolling();
-      stopWaiting();
     };
   }, []);
 
